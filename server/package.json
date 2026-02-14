@@ -1,0 +1,12 @@
+{
+  "name": "poll-rooms-websocket-server",
+  "version": "1.0.0",
+  "main": "websocket-server.js",
+  "scripts": {
+    "dev": "node websocket-server.js",
+    "start": "node websocket-server.js"
+  },
+  "dependencies": {
+    "ws": "^8.19.0"
+  }
+}
