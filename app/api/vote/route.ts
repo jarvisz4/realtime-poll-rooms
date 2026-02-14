@@ -1,14 +1,13 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { connectToDatabase } from '@/lib/db';
-import { Poll } from '@/models/Poll';
-import { VoteRecord } from '@/models/VoteRecord';
-import { getClientIp, hashIpAddress, isValidPollId } from '@/lib/utils';
-import { ApiResponse, VoteRequest, Poll as PollType } from '@/types';
+import { NextRequest, NextResponse } from "next/server";
+import { connectToDatabase } from "@/lib/db";
+import { Poll } from "@/models/Poll";
+import { VoteRecord } from "@/models/VoteRecord";
+import { getClientIp, hashIpAddress, isValidPollId } from "@/lib/utils";
+import { ApiResponse, VoteRequest, Poll as PollType } from "@/types";
 
-/**
- * POST /api/vote
- */
-export async function POST(request: NextRequest): Promise<NextResponse> {
+export async function POST(
+  request: NextRequest
+): Promise<NextResponse> {
   try {
     let body: VoteRequest;
 
@@ -16,7 +15,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       body = await request.json();
     } catch {
       return NextResponse.json<ApiResponse>(
-        { success: false, error: 'Invalid JSON' },
+        { success: false, error: "Invalid JSON" },
         { status: 400 }
       );
     }
@@ -25,14 +24,14 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
     if (!pollId || !isValidPollId(pollId)) {
       return NextResponse.json<ApiResponse>(
-        { success: false, error: 'Invalid poll ID' },
+        { success: false, error: "Invalid poll ID" },
         { status: 400 }
       );
     }
 
-    if (!optionId || typeof optionId !== 'string') {
+    if (!optionId || typeof optionId !== "string") {
       return NextResponse.json<ApiResponse>(
-        { success: false, error: 'Invalid option ID' },
+        { success: false, error: "Invalid option ID" },
         { status: 400 }
       );
     }
@@ -42,37 +41,49 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     const clientIp = getClientIp(request);
     const hashedIp = hashIpAddress(clientIp);
 
-    const hasVoted = await VoteRecord.hasVoted(pollId, hashedIp);
-    if (hasVoted) {
+    const alreadyVoted = await VoteRecord.hasVoted(
+      pollId,
+      hashedIp
+    );
+
+    if (alreadyVoted) {
       return NextResponse.json<ApiResponse>(
-        { success: false, error: 'Already voted' },
+        { success: false, error: "Already voted" },
         { status: 403 }
       );
     }
 
     const poll = await Poll.findById(pollId);
+
     if (!poll) {
       return NextResponse.json<ApiResponse>(
-        { success: false, error: 'Poll not found' },
+        { success: false, error: "Poll not found" },
         { status: 404 }
       );
     }
 
-    const optionExists = poll.options.some((o) => o.id === optionId);
+    const optionExists = poll.options.some(
+      (o: any) => o.id === optionId
+    );
+
     if (!optionExists) {
       return NextResponse.json<ApiResponse>(
-        { success: false, error: 'Invalid option' },
+        { success: false, error: "Invalid option" },
         { status: 400 }
       );
     }
 
-    await VoteRecord.recordVote(pollId, hashedIp);
+    await VoteRecord.recordVote(
+      pollId,
+      hashedIp,
+      optionId
+    );
 
     const updatedPoll = await Poll.findOneAndUpdate(
-      { _id: pollId, 'options.id': optionId },
+      { _id: pollId, "options.id": optionId },
       {
         $inc: {
-          'options.$.votes': 1,
+          "options.$.votes": 1,
           totalVotes: 1,
         },
       },
@@ -81,7 +92,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
     if (!updatedPoll) {
       return NextResponse.json<ApiResponse>(
-        { success: false, error: 'Failed to update vote' },
+        { success: false, error: "Failed to update vote" },
         { status: 500 }
       );
     }
@@ -95,35 +106,26 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       updatedAt: updatedPoll.updatedAt.toISOString(),
     };
 
-    /**
-     * 🔥 IMPORTANT PART
-     * Notify standalone WebSocket server
-     */
+    // notify websocket server
     try {
-      await fetch('http://localhost:3001/broadcast', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          pollId,
-          pollData,
-        }),
-      });
-    } catch (err) {
-      console.warn('WebSocket notify failed', err);
-    }
+      await fetch(
+        process.env.WS_SERVER_URL ||
+          "http://localhost:3001/broadcast",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ pollId, pollData }),
+        }
+      );
+    } catch {}
 
     return NextResponse.json<ApiResponse<PollType>>(
-      {
-        success: true,
-        data: pollData,
-      },
+      { success: true, data: pollData },
       { status: 200 }
     );
   } catch (error) {
-    console.error(error);
-
     return NextResponse.json<ApiResponse>(
-      { success: false, error: 'Server error' },
+      { success: false, error: "Server error" },
       { status: 500 }
     );
   }
