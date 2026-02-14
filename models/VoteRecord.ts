@@ -8,6 +8,7 @@ export interface IVoteRecord extends Document {
 }
 
 interface VoteRecordModel extends Model<IVoteRecord> {
+  deleteByPollId(id: string): unknown;
   hasVoted(pollId: string, hashedIp: string): Promise<boolean>;
   recordVote(
     pollId: string,
